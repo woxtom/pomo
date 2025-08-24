@@ -41,15 +41,15 @@ You may change the executable's name to pomo or whatever you like for simplicity
 
 run this
 ```bash
-sudo cp ./pomo /usr/bin
+sudo cp ./pomo /usr/local/bin
 ```
 
 Now you can invoke pomo by only typing `pomo` in your terminal! Enjoy your focus time!
 
 ### TODOs
 
-- [x] add notifying sounds
-- [x] varify show status ways
+- [x] add notification sounds
+- [x] show status
 - [x] make cli colorful
 - [x] add shortcuts in cli
 - [x] bundle it up as an executable
