@@ -39,13 +39,14 @@ You may change the executable's name to pomo or whatever you like for simplicity
 
 #### Linux
 
+run this
 ```bash
 sudo cp ./pomo /usr/bin
 ```
 
 Now you can invoke pomo by only typing `pomo` in your terminal! Enjoy your focus time!
 
-###TODOs
+### TODOs
 
 - [x] add notifying sounds
 - [x] varify show status ways
