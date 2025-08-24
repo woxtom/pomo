@@ -9,3 +9,4 @@ TODOs
 - [ ] make cli colorful
 - [ ] add shortcuts in cli
 - [ ] bundle it up as an windows executable
+- [ ] add gui

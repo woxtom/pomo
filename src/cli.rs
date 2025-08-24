@@ -1,10 +1,12 @@
-use std::{io, io::Write, process::exit};
+use std::{io, io::Write, process::exit,process::Command, thread, time::Duration};
+use colored::*;
 
 use crate::{pomodoro, tracker::ProjectTrackerDb};
 
 // handle all cli stuff, and create visuals
 pub fn welcome() {
-    println!("Welcome to the Pomodoro Tracker!  Delivered by WoftoM  🍅");
+    println!("Welcome to the {} Tracker! By {}", "Pomodoro".red().bold(), "WoftoM".green().italic());
+    println!("");
 }
 pub enum Action {
     Pomodoro,
@@ -16,12 +18,12 @@ pub enum Action {
 }
 pub fn action_selection() -> Action {
     loop {
-        println!("What's your next move? 🤗");
-        println!("1. Start a Pomodoro session");
-        println!("2. Create a new project");
-        println!("3. Delete an Old project");
-        println!("4. Show your focus status");
-        println!("5. Exit");
+        println!("What's your {} move?", "NEXT".bright_yellow());
+        println!("{}. Start a {} session","1".yellow(),"POMODORO".red());
+        println!("{}. Create a {} project","2".yellow(),"NEW".green());
+        println!("{}. Delete an {} project","3".yellow(),"OLD".blue());
+        println!("{}. Show your {}","4".yellow(), "STATUS".purple());
+        println!("{}. {} the tracker","5".yellow(), "EXIT".cyan());
         let mut selection = String::new();
         io::stdin().read_line(&mut selection).expect("Failed to read line");
         // convert selection to Action
@@ -44,7 +46,7 @@ pub fn action_router(action: Action, project_tracker_data:&ProjectTrackerDb) {
         Action::Pomodoro => {
             // Start a Pomodoro session
             match focus_mode(project_tracker_data) {
-                Ok(_) => {println!("\r🎉 Focus session completed!                            ");},
+                Ok(_) => {println!("\r🎉 Focus session completed!                            ");success_jingle();},
                 Err(e) => {println!("{}",e);},
             } 
         },
@@ -78,12 +80,12 @@ pub fn action_router(action: Action, project_tracker_data:&ProjectTrackerDb) {
 }
 pub fn easter_egg() {
     println!("Thanks for using the Pomodoro Tracker! 🍅");
-    println!(r#"                                                                   
+    let ascii_art = r#"                                                                   
                                                             ____   
            .---.                   ___                    ,'  , `. 
           /. ./|          .--.,  ,--.'|_               ,-+-,.' _ | 
-      .--'.  ' ;  ,---. ,--.'  \ |  | :,'   ,---.   ,-+-. ;   , || 
-     /__./ \ : | '   ,'\|  | /\/ :  : ' :  '   ,'\ ,--.'|'   |  ;| 
+      .--'.  ' ;  ,---. ,--.' ;  |  | :,'   ,---.   ,-+-. ;   , || 
+     /__./ \ : | '   ,'\|  | /   :  : ' :  '   ,'\ ,--.'|'   |  ;| 
  .--'.  '   \' ./   /   :  : : .;__,'  /  /   /   |   |  ,', |  ': 
 /___/ \ |    ' .   ; ,. :  | |-|  |   |  .   ; ,. |   | /  | |  || 
 ;   \  \;      '   | |: |  : :/:__,'| :  '   | |: '   | :  | :  |, 
@@ -93,7 +95,8 @@ pub fn easter_egg() {
     :   '  |--"  `----' |  : \   |  ,   /  `----' ;   | |`-'       
      \   \ ;            |  |,'    ---`-'          |   ;/           
       '---"             `--'                      '---'            
-                                                                   "#);
+                                                                   "#;
+    println!("{}",ascii_art.bright_cyan())
 }
 pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String>{
     let project_list = match pomodoro::get_all_project(project_tracker_data) {
@@ -105,9 +108,9 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
     if project_list.is_empty() {
         return Err(format!("No Project to focus. You may create a new one."));
     }
-    println!("Please select project for your time!");
+    println!("Please {} project for your time!","SELECT".blue());
     for (id, project) in project_list.iter().enumerate() {
-        println!("{}: {}", id, project.name_getter());
+        println!("{}: {}", id, project.name_getter().trim());
     }
     let project_index = loop{
         let mut project_selection = String::new();
@@ -124,12 +127,12 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
             }
         }
     };
-    println!("How many minutes would you like to focus for?");
+    println!("How many {} would you like to focus for?", "MINUTES".purple());
     let focus_time = loop {
         let mut time_input = String::new();
         io::stdin().read_line(&mut time_input).expect("Failed to read line");
-        match time_input.trim().parse::<u32>() {
-            Ok(minutes) if minutes > 0 => {
+        match time_input.trim().parse::<f32>() {
+            Ok(minutes) if minutes > 0.0 => {
                 break minutes as f32;
             }
             Ok(_) => {
@@ -140,34 +143,36 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
             }
         }
     };
-    println!("Focusing on project '{}' for {} minutes...", project_list[usize::from(project_index)].name_getter(), focus_time);
-    
+    println!("");
+    println!("{}ing on project '{}' for {} minutes...","FOCUS".green(), project_list[usize::from(project_index)].name_getter().trim(), focus_time);
+    println!("");
     // Convert minutes to seconds
     let total_seconds = (focus_time * 60.0) as u64;
-    let spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-    
+    let spinner_chars = ["⠋".red(), "⠙".magenta(), "⠹".yellow(), "⠸".green(), "⠼".cyan(), "⠴".blue(), "⠦".purple(), "⠧".black(), "⠇".bright_black(), "⠏".bright_red()];
+    let mut spinner_index=0;
     for remaining in (0..total_seconds).rev() {
         let minutes = remaining / 60;
         let seconds = remaining % 60;
-        let spinner = spinner_chars[(remaining % 10) as usize];
-        
-        // Clear the current line and print the timer
-        print!("\r\x1B[2K{} Time remaining: {:02}:{:02} ", spinner, minutes, seconds);
-        std::io::stdout().flush().unwrap();
-        
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        for _ in 0..10 {
+            
+            print!("\r\x1B[2K{} Time remaining: {:02}:{:02} ", spinner_chars[spinner_index % spinner_chars.len()], minutes, seconds);
+            std::io::stdout().flush().unwrap();
+            
+            spinner_index += 1;
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
     }
     pomodoro::focus_on_project(project_tracker_data,project_list[usize::from(project_index)].name_getter(), focus_time)
 }
 pub fn create_project(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String>{
-    println!("What's the project's name? 🤔");
+    println!("What's the project's {}?","NAME".cyan());
     let mut project_name = String::new();
     io::stdin().read_line(&mut project_name).expect("Failed to read line");
     //call pomodoro function
     pomodoro::create_project(project_tracker_data, project_name.as_str())
 }
 pub fn delete_project(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String> {
-    println!("Which project do you want to delete? Please type in its full name.");
+    println!("Which project do you want to {}? Please type in its full name.","DELETE".blue());
     let project_list = match pomodoro::get_all_project(project_tracker_data) {
         Ok(result) =>result,
         Err(e)=>{
@@ -184,19 +189,67 @@ pub fn delete_project(project_tracker_data:&ProjectTrackerDb) -> Result<bool, St
     io::stdin().read_line(&mut project_name).expect("Failed to read line");
     pomodoro::delete_project(project_tracker_data, project_name.as_str())
 }
-pub fn show_status(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String> {
-    println!("Your previous focus status is shown as below🤓: ");
+pub fn show_status(project_tracker_data: &ProjectTrackerDb) -> Result<bool, String> {
+    println!("");
+    println!("Your Focus Dashboard");
+    println!("═══════════════════════════════════════");
+    
     let project_list = match pomodoro::get_all_project(project_tracker_data) {
-        Ok(result) =>result,
-        Err(e)=>{
-            panic!("{}",e)
-        }
+        Ok(result) => result,
+        Err(e) => panic!("{}", e)
     };
+    
     if project_list.is_empty() {
         return Err(format!("Wow! You haven't focused for even one minute! 😹"));
-    };
-    for project in project_list.iter() {
-        println!("{}: {} minutes", project.name_getter().trim(), project.time_getter());
     }
+    
+    let total_time: f32 = project_list.iter().map(|p| p.time_getter()).sum();
+    let max_name_len = project_list.iter()
+        .map(|p| p.name_getter().trim().len())
+        .max()
+        .unwrap_or(0);
+    
+    for project in project_list.iter() {
+        let name = project.name_getter().trim();
+        let time = project.time_getter();
+        let percentage = (time as f64 / total_time as f64) * 100.0;
+        let bar_length = ((percentage / 100.0) * 30.0) as usize;
+        
+        let hours = time / 60.0;
+        let minutes = time % 60.0;
+        let time_str = if hours > 0.0 {
+            format!("{}h {}m", hours, minutes)
+        } else {
+            format!("{}m", minutes)
+        };
+        
+        let bar = "█".repeat(bar_length) + &"░".repeat(30 - bar_length);
+        
+        println!(
+            "{:<width$} │ {} │ {:>7} ({:5.1}%)", 
+            name, bar, time_str, percentage, width = max_name_len
+        );
+    }
+    
+    println!("═══════════════════════════════════════");
+    let total_hours = total_time / 60.0;
+    let total_minutes = total_time % 60.0;
+    println!("{} Focus Time: {}h {}m","TOTAL".cyan(), total_hours, total_minutes);
+    println!("");
     Ok(true)
+}
+fn success_jingle() {
+    let notes = [
+        (523, 200), // C5 - quick
+        (659, 200), // E5 - ascending  
+        (784, 200), // G5 - higher
+        (1047, 600), // C6 - triumphant end
+    ];
+    
+    for (freq, duration) in notes.iter() {
+        let _ = Command::new("powershell.exe")
+            .args(&["-c", &format!("[Console]::Beep({}, {})", freq, duration)])
+            .output();
+        thread::sleep(Duration::from_millis(50));
+    }
 }
