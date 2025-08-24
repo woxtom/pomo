@@ -8,5 +8,5 @@ TODOs
 - [x] varify show status ways
 - [x] make cli colorful
 - [x] add shortcuts in cli
-- [ ] bundle it up as an executable
+- [x] bundle it up as an executable
 - [ ] add gui
