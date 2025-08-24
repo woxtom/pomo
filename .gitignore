@@ -1,3 +1,4 @@
 /target
+/wix
 *.db
 .DS_Store
