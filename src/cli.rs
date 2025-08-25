@@ -216,13 +216,7 @@ pub fn show_status(project_tracker_data: &ProjectTrackerDb) -> Result<bool, Stri
         let bar_length = ((percentage / 100.0) * 30.0) as usize;
         
         let hours = time / 60.0;
-        let minutes = time % 60.0;
-        let time_str = if hours > 0.0 {
-            format!("{}h {}m", hours, minutes)
-        } else {
-            format!("{}m", minutes)
-        };
-        
+        let time_str = format!("{}h", hours);
         let bar = "█".repeat(bar_length) + &"░".repeat(30 - bar_length);
         
         println!(
@@ -233,8 +227,7 @@ pub fn show_status(project_tracker_data: &ProjectTrackerDb) -> Result<bool, Stri
     
     println!("═══════════════════════════════════════");
     let total_hours = total_time / 60.0;
-    let total_minutes = total_time % 60.0;
-    println!("{} Focus Time: {}h {}m","TOTAL".cyan(), total_hours, total_minutes);
+    println!("{} Focus Time: {}h","TOTAL".cyan(), total_hours);
     println!("");
     Ok(true)
 }
