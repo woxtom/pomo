@@ -54,3 +54,4 @@ Now you can invoke pomo by only typing `pomo` in your terminal! Enjoy your focus
 - [x] add shortcuts in cli
 - [x] bundle it up as an executable
 - [ ] add gui
+- [ ] add journal feature
