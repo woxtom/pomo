@@ -1,7 +1,7 @@
 use std::{io, io::Write, process::exit,process::Command, thread, time::Duration};
 use colored::*;
-
-use crate::{pomodoro, tracker::ProjectTrackerDb};
+use crate::pomodoro;
+use crate::tracker::ProjectTrackerDb;
 
 // handle all cli stuff, and create visuals
 pub fn welcome() {
@@ -14,6 +14,7 @@ pub enum Action {
     DeleteProject,
     EasterEgg,
     ShowStatus,
+    WriteJounal,
     Exit,
 }
 pub fn action_selection() -> Action {
@@ -22,8 +23,9 @@ pub fn action_selection() -> Action {
         println!("{}. Start a {} session","1".yellow(),"POMODORO".red());
         println!("{}. Create a {} project","2".yellow(),"NEW".green());
         println!("{}. Delete an {} project","3".yellow(),"OLD".blue());
-        println!("{}. Show your {}","4".yellow(), "STATUS".purple());
-        println!("{}. {} the tracker","5".yellow(), "EXIT".cyan());
+        println!("{}. Show your {}","4".yellow(), "STATUS".bright_magenta());
+        println!("{}. Project {}","5".yellow(),"JOURNALING".bright_black());
+        println!("{}. {} the tracker","6".yellow(), "EXIT".cyan());
         let mut selection = String::new();
         io::stdin().read_line(&mut selection).expect("Failed to read line");
         // convert selection to Action
@@ -32,8 +34,9 @@ pub fn action_selection() -> Action {
             Ok(2) => return Action::CreateNewProject,
             Ok(3) => return Action::DeleteProject,
             Ok(4) => return Action::ShowStatus,
-            Ok(5) => return Action::Exit,
-            Ok(6) => return Action::EasterEgg,
+            Ok(5) => return Action::WriteJounal,
+            Ok(6) => return Action::Exit,
+            Ok(7) => return Action::EasterEgg,
             _ => {
                 println!("Invalid selection. Please try again.");
                 continue;
@@ -46,13 +49,19 @@ pub fn action_router(action: Action, project_tracker_data:&ProjectTrackerDb) {
         Action::Pomodoro => {
             // Start a Pomodoro session
             match focus_mode(project_tracker_data) {
-                Ok(_) => {println!("\r🎉 Focus session completed!                            ");success_jingle();},
+                Ok(true) => {println!("\r🎉 Focus session completed!                            ");success_jingle();},
+                Ok(false) => {
+                    println!("");
+                }
                 Err(e) => {println!("{}",e);},
             } 
         },
         Action::CreateNewProject => {
             match create_project(project_tracker_data) {
-                Ok(_) => {println!("Project created! ✅")}
+                Ok(true) => {println!("Project created! ✅")}
+                Ok(false) => {
+                    println!("");
+                }
                 Err(e) => {println!("{}",e)}
             };
         },
@@ -62,7 +71,12 @@ pub fn action_router(action: Action, project_tracker_data:&ProjectTrackerDb) {
         },
         Action::DeleteProject => {
             match delete_project(project_tracker_data) {
-                Ok(_) => {println!("Project deleted! ✅")}
+                Ok(true) => {
+                    println!("Project deleted! ✅")
+                }
+                Ok(false) => {
+                    println!("");
+                }
                 Err(e) => {println!("{}",e)}
             };
         },
@@ -71,7 +85,20 @@ pub fn action_router(action: Action, project_tracker_data:&ProjectTrackerDb) {
                 Ok(_) => {println!("You're cool! Do you know what you need to do to become an expert is only to focus on one thing for 10,000 hours? 🍻 CHEERS!");},
                 Err(e) => {println!("{}",e);},
             };
-        }
+        },
+        Action::WriteJounal => {
+            match journal_mode(project_tracker_data) {
+                Ok(true) => {
+                    println!("Keep Journaling! It's a good habit!");
+                }
+                Ok(false) => {
+                    println!("");
+                }
+                Err(e) => {
+                    println!("{}",e);
+                }
+            }
+        },
         Action::Exit => {
             println!("Goodbye! 🍅");
             exit(0);
@@ -145,6 +172,16 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
     };
     println!("");
     println!("{}ing on project '{}' for {} minutes...","FOCUS".green(), project_list[usize::from(project_index)].name_getter().trim(), focus_time);
+    println!("Press ENTER to start, or type 'cancel' to abort: ");
+    
+    let mut start_input = String::new();
+    io::stdin().read_line(&mut start_input).expect("Failed to read line");
+    
+    if start_input.trim().eq_ignore_ascii_case("cancel") {
+        println!("Focus session cancelled! 🚫");
+        return Ok(false);
+    }
+    
     println!("");
     // Convert minutes to seconds
     let total_seconds = (focus_time * 60.0) as u64;
@@ -154,7 +191,6 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
         let minutes = remaining / 60;
         let seconds = remaining % 60;
         for _ in 0..10 {
-            
             print!("\r\x1B[2K{} Time remaining: {:02}:{:02} ", spinner_chars[spinner_index % spinner_chars.len()], minutes, seconds);
             std::io::stdout().flush().unwrap();
             
@@ -162,17 +198,24 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
-    pomodoro::focus_on_project(project_tracker_data,project_list[usize::from(project_index)].name_getter(), focus_time)
+    pomodoro::focus_on_project(project_tracker_data,project_list[usize::from(project_index)].name_getter().trim(), focus_time)
 }
 pub fn create_project(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String>{
-    println!("What's the project's {}?","NAME".cyan());
+    println!("What's the project's {}, or type 'cancel' to abort: ","NAME".cyan());
     let mut project_name = String::new();
     io::stdin().read_line(&mut project_name).expect("Failed to read line");
-    //call pomodoro function
-    pomodoro::create_project(project_tracker_data, project_name.as_str())
+    let project_name= project_name.trim();
+    if project_name.is_empty() {
+        return Err(format!("Project name cannot be empty.").into());
+    }
+    if project_name.eq_ignore_ascii_case("cancel") {
+        println!("Project creation cancelled! 🚫");
+        return Ok(false);
+    }
+    pomodoro::create_project(project_tracker_data, project_name)
 }
 pub fn delete_project(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String> {
-    println!("Which project do you want to {}? Please type in its full name.","DELETE".blue());
+    println!("Which project do you want to {}? Please type in its full name (or 'cancel' to abort).","DELETE".blue());
     let project_list = match pomodoro::get_all_project(project_tracker_data) {
         Ok(result) =>result,
         Err(e)=>{
@@ -187,7 +230,14 @@ pub fn delete_project(project_tracker_data:&ProjectTrackerDb) -> Result<bool, St
     };
     let mut project_name = String::new();
     io::stdin().read_line(&mut project_name).expect("Failed to read line");
-    pomodoro::delete_project(project_tracker_data, project_name.as_str())
+    
+    // Check for cancellation
+    if project_name.trim().eq_ignore_ascii_case("cancel") {
+        println!("Deletion cancelled! 🚫");
+        return Ok(false);
+    }
+    
+    pomodoro::delete_project(project_tracker_data, project_name.trim())
 }
 pub fn show_status(project_tracker_data: &ProjectTrackerDb) -> Result<bool, String> {
     println!("");
@@ -196,7 +246,9 @@ pub fn show_status(project_tracker_data: &ProjectTrackerDb) -> Result<bool, Stri
     
     let project_list = match pomodoro::get_all_project(project_tracker_data) {
         Ok(result) => result,
-        Err(e) => panic!("{}", e)
+        Err(e) => {
+            return Err(e);
+        }
     };
     
     if project_list.is_empty() {
@@ -231,6 +283,44 @@ pub fn show_status(project_tracker_data: &ProjectTrackerDb) -> Result<bool, Stri
     println!("");
     Ok(true)
 }
+pub fn journal_mode(project_tracker_data: &ProjectTrackerDb) -> Result<bool, String> {
+    let project_list = match pomodoro::get_all_project(project_tracker_data) {
+        Ok(result) =>result,
+        Err(e)=>{
+            panic!("{}",e)
+        }
+    };
+    if project_list.is_empty() {
+        return Err(format!("No journal to write. You may create a new one."));
+    }
+    println!("Please {} project for journaling! (type 'cancel' to abort)","SELECT".blue());
+    for (id, project) in project_list.iter().enumerate() {
+        println!("{}: {}", id, project.name_getter().trim());
+    }
+    let project_index = loop{
+        let mut project_selection = String::new();
+        io::stdin().read_line(&mut project_selection).expect("Failed to read line");
+        
+        // Check for cancellation
+        if project_selection.trim().eq_ignore_ascii_case("cancel") {
+            println!("Journaling cancelled! 🚫");
+            return Ok(false);
+        }
+        
+        match project_selection.trim().parse::<u8>() {
+            Ok(index) if usize::from(index) < project_list.len() => {
+                break index;
+            }
+            Ok(_) => {
+                println!("Invalid project index. Please try again.");
+            }
+            Err(_) => {
+                println!("Please type in your desired project's id or 'cancel' to abort.");
+            }
+        }
+    };
+    pomodoro::write_journal(project_tracker_data, project_list[usize::from(project_index)].name_getter().trim())
+}
 fn success_jingle() {
     let notes = [
         (523, 200), // C5 - quick
@@ -239,10 +329,20 @@ fn success_jingle() {
         (1047, 600), // C6 - triumphant end
     ];
     
-    for (freq, duration) in notes.iter() {
-        let _ = Command::new("powershell.exe")
-            .args(&["-c", &format!("[Console]::Beep({}, {})", freq, duration)])
-            .output();
-        thread::sleep(Duration::from_millis(50));
+    if std::env::consts::OS == "windows" {
+        // Windows: use PowerShell for proper tunes
+        for (freq, duration) in notes.iter() {
+            let _ = Command::new("powershell.exe")
+                .args(&["-c", &format!("[Console]::Beep({}, {})", freq, duration)])
+                .output();
+            thread::sleep(Duration::from_millis(50));
+        }
+    } else {
+        // Linux: use ASCII bell character
+        for _ in 0..4 {
+            print!("\x07");
+            std::io::stdout().flush().unwrap();
+            thread::sleep(Duration::from_millis(50));
+        }
     }
 }

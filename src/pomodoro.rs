@@ -42,3 +42,32 @@ pub fn get_all_project(project_tracker_data: &ProjectTrackerDb) -> Result<Vec<Pr
         Err(e) => Err(format!("Error retrieving all files, specifically {}", e))
     }
 }
+
+pub fn write_journal(project_tracker_data: &ProjectTrackerDb, project_name: &str) -> Result<bool, String> {
+    let project = match project_tracker_data.get_single_project(project_name) {
+        Ok(Some(valid_project)) => valid_project,
+        Ok(None) => return Err(format!("No such project named {}", project_name)),
+        Err(e) => return Err(format!("Error retrieving project: {}", e)),
+    };
+    let journal_path = project.path_getter();
+    if !journal_path.exists() {
+        // Recreate the journal file if it was deleted
+        std::fs::File::create(&journal_path).map_err(|e| format!("Failed to recreate journal file: {}", e))?;
+    }
+    // Open the journal file in the user's default editor (cross-platform)
+    let editor = if std::env::consts::OS == "windows" {
+        "notepad".to_string()
+    } else {
+        std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string())
+    };
+    let status = std::process::Command::new(editor)
+        .arg(&journal_path)
+        .status()
+        .map_err(|e| format!("Failed to open editor: {}", e))?;
+
+    if status.success() {
+        Ok(true)
+    } else {
+        Err(format!("Editor exited with a non-zero status."))
+    }
+}
