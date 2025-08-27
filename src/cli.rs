@@ -135,13 +135,20 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
     if project_list.is_empty() {
         return Err(format!("No Project to focus. You may create a new one."));
     }
-    println!("Please {} project for your time!","SELECT".blue());
+    println!("Please {} project for your time! (type 'cancel' to abort)","SELECT".blue());
     for (id, project) in project_list.iter().enumerate() {
         println!("{}: {}", id, project.name_getter().trim());
     }
     let project_index = loop{
         let mut project_selection = String::new();
         io::stdin().read_line(&mut project_selection).expect("Failed to read line");
+        
+        // Check for cancellation
+        if project_selection.trim().eq_ignore_ascii_case("cancel") {
+            println!("Focus session cancelled! 🚫");
+            return Ok(false);
+        }
+        
         match project_selection.trim().parse::<u8>() {
             Ok(index) if usize::from(index) < project_list.len() => {
                 break index;
@@ -150,14 +157,21 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
                 println!("Invalid project index. Please try again.");
             }
             Err(_) => {
-                println!("Please type in your desired project's id.");
+                println!("Please type in your desired project's id or 'cancel' to abort.");
             }
         }
     };
-    println!("How many {} would you like to focus for?", "MINUTES".purple());
+    println!("How many {} would you like to focus for? (type 'cancel' to abort)", "MINUTES".purple());
     let focus_time = loop {
         let mut time_input = String::new();
         io::stdin().read_line(&mut time_input).expect("Failed to read line");
+        
+        // Check for cancellation
+        if time_input.trim().eq_ignore_ascii_case("cancel") {
+            println!("Focus session cancelled! 🚫");
+            return Ok(false);
+        }
+        
         match time_input.trim().parse::<f32>() {
             Ok(minutes) if minutes > 0.0 => {
                 break minutes as f32;
@@ -172,11 +186,12 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
     };
     println!("");
     println!("{}ing on project '{}' for {} minutes...","FOCUS".green(), project_list[usize::from(project_index)].name_getter().trim(), focus_time);
-    println!("Press ENTER to start, or type 'cancel' to abort: ");
+    println!("Press ENTER to start (or type 'cancel' to abort): ");
     
     let mut start_input = String::new();
     io::stdin().read_line(&mut start_input).expect("Failed to read line");
     
+    // Check for cancellation
     if start_input.trim().eq_ignore_ascii_case("cancel") {
         println!("Focus session cancelled! 🚫");
         return Ok(false);
