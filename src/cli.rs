@@ -1,5 +1,7 @@
-use std::{io, io::Write, process::exit,process::Command, thread, time::Duration};
+use std::{io, io::Write, process::exit,process::Command, thread, time::{Duration, Instant}};
 use colored::*;
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use crate::pomodoro;
 use crate::tracker::ProjectTrackerDb;
 
@@ -139,19 +141,19 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
     for (id, project) in project_list.iter().enumerate() {
         println!("{}: {}", id, project.name_getter().trim());
     }
-    let project_index = loop{
+    let project_index = loop {
         let mut project_selection = String::new();
         io::stdin().read_line(&mut project_selection).expect("Failed to read line");
-        
+
         // Check for cancellation
         if project_selection.trim().eq_ignore_ascii_case("cancel") {
             println!("Focus session cancelled! 🚫");
             return Ok(false);
         }
-        
+
         match project_selection.trim().parse::<u8>() {
             Ok(index) if usize::from(index) < project_list.len() => {
-                break index;
+                break usize::from(index);
             }
             Ok(_) => {
                 println!("Invalid project index. Please try again.");
@@ -161,20 +163,95 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
             }
         }
     };
-    println!("How many {} would you like to focus for? (type 'cancel' to abort)", "MINUTES".purple());
-    let focus_time = loop {
-        let mut time_input = String::new();
-        io::stdin().read_line(&mut time_input).expect("Failed to read line");
-        
-        // Check for cancellation
-        if time_input.trim().eq_ignore_ascii_case("cancel") {
+
+    let project_name = project_list[project_index].name_getter().trim().to_string();
+
+    let focus_time = match prompt_for_minutes("How many MINUTES would you like to focus for? (type 'cancel' to abort)") {
+        Some(value) => value,
+        None => {
             println!("Focus session cancelled! 🚫");
             return Ok(false);
         }
-        
+    };
+
+    let rest_time = match prompt_for_minutes("How many MINUTES should each rest be? (type 'cancel' to abort)") {
+        Some(value) => value,
+        None => {
+            println!("Focus session cancelled! 🚫");
+            return Ok(false);
+        }
+    };
+
+    println!("");
+    println!("{}ing on project '{}' for {} minutes...","FOCUS".green(), project_name, focus_time);
+    println!("Rest intervals set to {} minutes.", rest_time);
+    println!("Press ENTER to start (or type 'cancel' to abort). ");
+    println!("Controls during timers: 'p' to pause/resume, 'q' to stop the session.");
+
+    let mut start_input = String::new();
+    io::stdin().read_line(&mut start_input).expect("Failed to read line");
+
+    if start_input.trim().eq_ignore_ascii_case("cancel") {
+        println!("Focus session cancelled! 🚫");
+        return Ok(false);
+    }
+
+    let focus_seconds = (focus_time * 60.0) as u64;
+    let rest_seconds = (rest_time * 60.0) as u64;
+    let mut cycle_count = 1usize;
+    let mut total_tracked_minutes = 0.0f32;
+    let mut any_tracked = false;
+
+    loop {
+        println!("");
+        println!("{} Cycle {} — Focus", "Starting".bright_green(), cycle_count);
+        let focus_outcome = run_timer("Focus", focus_seconds)?;
+        let focus_minutes_logged = focus_outcome.elapsed_seconds as f32 / 60.0;
+        if focus_minutes_logged > 0.0 {
+            pomodoro::focus_on_project(project_tracker_data, &project_name, focus_minutes_logged)?;
+            total_tracked_minutes += focus_minutes_logged;
+            any_tracked = true;
+        }
+
+        if focus_outcome.quit {
+            println!("{} session ended during focus.", "Focus".yellow());
+            break;
+        }
+
+        println!("{} Focus complete! Time to rest.", "✔".green());
+
+        println!("{} Cycle {} — Rest", "Starting".cyan(), cycle_count);
+        let rest_outcome = run_timer("Rest", rest_seconds)?;
+
+        if rest_outcome.quit {
+            println!("{} session ended during rest.", "Focus".yellow());
+            break;
+        }
+
+        println!("{} Rest complete!", "✔".green());
+        cycle_count += 1;
+    }
+
+    if any_tracked {
+        println!("Total focus recorded: {:.2} minutes", total_tracked_minutes);
+    }
+
+    Ok(any_tracked)
+}
+
+fn prompt_for_minutes(prompt: &str) -> Option<f32> {
+    println!("{}", prompt);
+    loop {
+        let mut time_input = String::new();
+        io::stdin().read_line(&mut time_input).expect("Failed to read line");
+
+        if time_input.trim().eq_ignore_ascii_case("cancel") {
+            return None;
+        }
+
         match time_input.trim().parse::<f32>() {
             Ok(minutes) if minutes > 0.0 => {
-                break minutes as f32;
+                return Some(minutes);
             }
             Ok(_) => {
                 println!("Please enter a positive number of minutes.");
@@ -183,38 +260,104 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
                 println!("Please enter a valid number of minutes.");
             }
         }
-    };
-    println!("");
-    println!("{}ing on project '{}' for {} minutes...","FOCUS".green(), project_list[usize::from(project_index)].name_getter().trim(), focus_time);
-    println!("Press ENTER to start (or type 'cancel' to abort): ");
-    
-    let mut start_input = String::new();
-    io::stdin().read_line(&mut start_input).expect("Failed to read line");
-    
-    // Check for cancellation
-    if start_input.trim().eq_ignore_ascii_case("cancel") {
-        println!("Focus session cancelled! 🚫");
-        return Ok(false);
     }
-    
-    println!("");
-    // Convert minutes to seconds
-    let total_seconds = (focus_time * 60.0) as u64;
-    let spinner_chars = ["⠋".red(), "⠙".magenta(), "⠹".yellow(), "⠸".green(), "⠼".cyan(), "⠴".blue(), "⠦".purple(), "⠧".black(), "⠇".bright_black(), "⠏".bright_red()];
-    let mut spinner_index=0;
-    for remaining in (0..total_seconds).rev() {
+}
+
+struct RawModeGuard;
+
+impl RawModeGuard {
+    fn new() -> Result<Self, String> {
+        enable_raw_mode().map_err(|e| format!("Failed to enable raw mode: {}", e))?;
+        Ok(Self)
+    }
+}
+
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+    }
+}
+
+struct TimerOutcome {
+    elapsed_seconds: u64,
+    quit: bool,
+}
+
+fn run_timer(label: &str, total_seconds: u64) -> Result<TimerOutcome, String> {
+    if total_seconds == 0 {
+        return Ok(TimerOutcome { elapsed_seconds: 0, quit: false });
+    }
+
+    let _raw_mode = RawModeGuard::new()?;
+    let spinner_frames: Vec<ColoredString> = vec![
+        "⠋".red(),
+        "⠙".magenta(),
+        "⠹".yellow(),
+        "⠸".green(),
+        "⠼".cyan(),
+        "⠴".blue(),
+        "⠦".purple(),
+        "⠧".black(),
+        "⠇".bright_black(),
+        "⠏".bright_red(),
+    ];
+
+    let mut remaining = total_seconds;
+    let mut elapsed = 0u64;
+    let mut spinner_index = 0usize;
+    let mut paused = false;
+    let mut last_tick = Instant::now();
+
+    loop {
+        if !paused && last_tick.elapsed() >= Duration::from_secs(1) {
+            if remaining > 0 {
+                remaining -= 1;
+                elapsed += 1;
+            }
+            last_tick = Instant::now();
+        } else if paused {
+            last_tick = Instant::now();
+        }
+
         let minutes = remaining / 60;
         let seconds = remaining % 60;
-        for _ in 0..10 {
-            print!("\r\x1B[2K{} Time remaining: {:02}:{:02} ", spinner_chars[spinner_index % spinner_chars.len()], minutes, seconds);
-            std::io::stdout().flush().unwrap();
-            
-            spinner_index += 1;
-            std::thread::sleep(std::time::Duration::from_millis(100));
+        let spinner = if paused {
+            "⏸".yellow().bold()
+        } else {
+            spinner_frames[spinner_index % spinner_frames.len()].clone()
+        };
+
+        print!("\r\x1B[2K{} {} remaining: {:02}:{:02}", spinner, label, minutes, seconds);
+        io::stdout().flush().map_err(|e| format!("Failed to update timer: {}", e))?;
+
+        if remaining == 0 {
+            println!("");
+            return Ok(TimerOutcome { elapsed_seconds: elapsed, quit: false });
         }
+
+        if event::poll(Duration::from_millis(100)).map_err(|e| format!("Failed to read input: {}", e))? {
+            match event::read().map_err(|e| format!("Failed to read input: {}", e))? {
+                Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
+                    match key_event.code {
+                        KeyCode::Char('p') | KeyCode::Char('P') => {
+                            paused = !paused;
+                        }
+                        KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
+                            println!("");
+                            return Ok(TimerOutcome { elapsed_seconds: elapsed, quit: true });
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        spinner_index = spinner_index.wrapping_add(1);
+        thread::sleep(Duration::from_millis(100));
     }
-    pomodoro::focus_on_project(project_tracker_data,project_list[usize::from(project_index)].name_getter().trim(), focus_time)
 }
+
 pub fn create_project(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String>{
     println!("What's the project's {}, or type 'cancel' to abort: ","NAME".cyan());
     let mut project_name = String::new();

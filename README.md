@@ -4,6 +4,7 @@ _A pomodoro project tracker that allows you to focus on your personal project an
 
 ### Features
   - ✅ Start pomodoro sessions with customizable duration
+  - ✅ Loop focus and rest cycles with pause controls
   - ✅ Create and manage projects with time tracking
   - ✅ View project status with visual progress bars
   - ✅ Delete old projects
@@ -21,6 +22,11 @@ _A pomodoro project tracker that allows you to focus on your personal project an
   1. Download the appropriate binary for your OS
   2. Run from terminal: `./pomo-linux-x86_64` (or `pomo-windows-x86_64.exe` on Windows)
   3. Follow the interactive menu to start tracking!
+
+### Focus Session Controls
+- `'p'` toggles pause/resume during focus or rest
+- `'q'` ends the current session immediately
+- Configure focus and rest lengths before starting the loop
 
 ### Journaling Feature
 
