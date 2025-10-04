@@ -219,6 +219,7 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
         }
 
         println!("{} Focus complete! Time to rest.", "✔".green());
+        success_jingle();
 
         println!("{} Cycle {} — Rest", "Starting".cyan(), cycle_count);
         let rest_outcome = run_timer("Rest", rest_seconds)?;
@@ -229,6 +230,7 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
         }
 
         println!("{} Rest complete!", "✔".green());
+        success_jingle();
         cycle_count += 1;
     }
 
