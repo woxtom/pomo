@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result, params};
 use std::path::PathBuf;
 fn sanitize_filename(name: &str) -> String {
     // Remove invalid characters and control chars, trim trailing spaces/dots (invalid on Windows)
-    let forbidden = ['<','>',':','"','/','\\','|','?','*'];
+    let forbidden = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
     let mut s: String = name
         .trim() // remove \r\n and surrounding spaces
         .chars()
@@ -14,9 +14,8 @@ fn sanitize_filename(name: &str) -> String {
     // Avoid Windows reserved names like CON, PRN, AUX, NUL, COM1..LPT9
     let upper = s.to_ascii_uppercase();
     let reserved = [
-        "CON","PRN","AUX","NUL",
-        "COM1","COM2","COM3","COM4","COM5","COM6","COM7","COM8","COM9",
-        "LPT1","LPT2","LPT3","LPT4","LPT5","LPT6","LPT7","LPT8","LPT9",
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
     ];
     if reserved.contains(&upper.as_str()) {
         s.push('_');
@@ -29,7 +28,7 @@ fn get_project_path(project_name: &str) -> PathBuf {
     p_path.push("pomo");
     p_path.push("journal");
     std::fs::create_dir_all(&p_path).expect("Failed to create data directory");
-    let project_journal_name=format!("{}.md", sanitize_filename(project_name));
+    let project_journal_name = format!("{}.md", sanitize_filename(project_name));
     p_path.push(project_journal_name);
     p_path
 }
@@ -59,7 +58,7 @@ pub struct ProjectTrackerDb {
 impl ProjectTrackerDb {
     pub fn new(db_path: &str) -> Result<Self> {
         let conn = Connection::open(db_path)?;
-        
+
         // Create table
         conn.execute(
             "CREATE TABLE IF NOT EXISTS project_with_journal (
@@ -86,7 +85,9 @@ impl ProjectTrackerDb {
         Ok(self.conn.last_insert_rowid())
     }
     pub fn get_projects(&self) -> Result<Vec<ProjectTracker>> {
-        let mut stmt = self.conn.prepare("SELECT project_name, time_invested, journal_path FROM project_with_journal")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT project_name, time_invested, journal_path FROM project_with_journal",
+        )?;
         let project_iter = stmt.query_map([], |row| {
             Ok(ProjectTracker {
                 project_name: row.get(0)?,
@@ -118,22 +119,28 @@ impl ProjectTrackerDb {
     pub fn update_project(&self, project_name: &str, time_invested: f32) -> Result<bool> {
         let updated = self.conn.execute(
             "UPDATE project_with_journal SET time_invested = ?1 WHERE project_name = ?2",
-            params![time_invested, project_name]
+            params![time_invested, project_name],
         )?;
-        Ok(updated>0)
+        Ok(updated > 0)
     }
     pub fn delete_project(&self, project_name: &str) -> Result<bool> {
         //delete the journal file associated with the project
         if let Some(project) = self.get_single_project(project_name)? {
             let journal_path = project.path_getter();
             if journal_path.exists() {
-                std::fs::remove_file(journal_path).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                std::fs::remove_file(journal_path).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
             }
         }
         //delete the project from the database
         let deleted = self.conn.execute(
             "DELETE FROM project_with_journal WHERE project_name = ?1",
-            params![project_name]
+            params![project_name],
         )?;
         Ok(deleted > 0)
     }

@@ -1,8 +1,8 @@
 use crate::cli::{action_router, action_selection};
 use std::path::PathBuf;
-pub mod tracker;
 pub mod cli;
 pub mod pomodoro;
+pub mod tracker;
 
 fn get_database_path() -> PathBuf {
     // Use proper platform-specific data directory
@@ -16,8 +16,9 @@ fn get_database_path() -> PathBuf {
 fn main() {
     cli::welcome();
     let db_path = get_database_path();
-    let project_db = tracker::ProjectTrackerDb::new(db_path.to_str().unwrap()).expect("Error connecting database");
-    loop{
+    let project_db = tracker::ProjectTrackerDb::new(db_path.to_str().unwrap())
+        .expect("Error connecting database");
+    loop {
         let selected_action = action_selection();
         action_router(selected_action, &project_db);
         println!("")

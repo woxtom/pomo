@@ -1,13 +1,24 @@
-use std::{io, io::Write, process::exit,process::Command, thread, time::{Duration, Instant}};
+use crate::pomodoro;
+use crate::tracker::ProjectTrackerDb;
 use colored::*;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use crate::pomodoro;
-use crate::tracker::ProjectTrackerDb;
+use std::{
+    io,
+    io::Write,
+    process::Command,
+    process::exit,
+    thread,
+    time::{Duration, Instant},
+};
 
 // handle all cli stuff, and create visuals
 pub fn welcome() {
-    println!("Welcome to the {} Tracker! By {}", "Pomodoro".red().bold(), "WoftoM".green().italic());
+    println!(
+        "Welcome to the {} Tracker! By {}",
+        "Pomodoro".red().bold(),
+        "WoftoM".green().italic()
+    );
     println!("");
 }
 pub enum Action {
@@ -22,14 +33,16 @@ pub enum Action {
 pub fn action_selection() -> Action {
     loop {
         println!("What's your {} move?", "NEXT".bright_yellow());
-        println!("{}. Start a {} session","1".yellow(),"POMODORO".red());
-        println!("{}. Create a {} project","2".yellow(),"NEW".green());
-        println!("{}. Delete an {} project","3".yellow(),"OLD".blue());
-        println!("{}. Show your {}","4".yellow(), "STATUS".bright_magenta());
-        println!("{}. Project {}","5".yellow(),"JOURNALING".bright_black());
-        println!("{}. {} the tracker","6".yellow(), "EXIT".cyan());
+        println!("{}. Start a {} session", "1".yellow(), "POMODORO".red());
+        println!("{}. Create a {} project", "2".yellow(), "NEW".green());
+        println!("{}. Delete an {} project", "3".yellow(), "OLD".blue());
+        println!("{}. Show your {}", "4".yellow(), "STATUS".bright_magenta());
+        println!("{}. Project {}", "5".yellow(), "JOURNALING".bright_black());
+        println!("{}. {} the tracker", "6".yellow(), "EXIT".cyan());
         let mut selection = String::new();
-        io::stdin().read_line(&mut selection).expect("Failed to read line");
+        io::stdin()
+            .read_line(&mut selection)
+            .expect("Failed to read line");
         // convert selection to Action
         match selection.trim().parse::<u8>() {
             Ok(1) => return Action::Pomodoro,
@@ -46,31 +59,40 @@ pub fn action_selection() -> Action {
         }
     }
 }
-pub fn action_router(action: Action, project_tracker_data:&ProjectTrackerDb) {
+pub fn action_router(action: Action, project_tracker_data: &ProjectTrackerDb) {
     match action {
         Action::Pomodoro => {
             // Start a Pomodoro session
             match focus_mode(project_tracker_data) {
-                Ok(true) => {println!("\r🎉 Focus session completed!                            ");success_jingle();},
+                Ok(true) => {
+                    println!("\r🎉 Focus session completed!                            ");
+                    focus_completion_sound();
+                }
                 Ok(false) => {
                     println!("");
                 }
-                Err(e) => {println!("{}",e);},
-            } 
-        },
+                Err(e) => {
+                    println!("{}", e);
+                }
+            }
+        }
         Action::CreateNewProject => {
             match create_project(project_tracker_data) {
-                Ok(true) => {println!("Project created! ✅")}
+                Ok(true) => {
+                    println!("Project created! ✅")
+                }
                 Ok(false) => {
                     println!("");
                 }
-                Err(e) => {println!("{}",e)}
+                Err(e) => {
+                    println!("{}", e)
+                }
             };
-        },
+        }
         Action::EasterEgg => {
             // Easter egg action
             easter_egg();
-        },
+        }
         Action::DeleteProject => {
             match delete_project(project_tracker_data) {
                 Ok(true) => {
@@ -79,32 +101,38 @@ pub fn action_router(action: Action, project_tracker_data:&ProjectTrackerDb) {
                 Ok(false) => {
                     println!("");
                 }
-                Err(e) => {println!("{}",e)}
+                Err(e) => {
+                    println!("{}", e)
+                }
             };
-        },
+        }
         Action::ShowStatus => {
             match show_status(project_tracker_data) {
-                Ok(_) => {println!("You're cool! Do you know what you need to do to become an expert is only to focus on one thing for 10,000 hours? 🍻 CHEERS!");},
-                Err(e) => {println!("{}",e);},
-            };
-        },
-        Action::WriteJounal => {
-            match journal_mode(project_tracker_data) {
-                Ok(true) => {
-                    println!("Keep Journaling! It's a good habit!");
-                }
-                Ok(false) => {
-                    println!("");
+                Ok(_) => {
+                    println!(
+                        "You're cool! Do you know what you need to do to become an expert is only to focus on one thing for 10,000 hours? 🍻 CHEERS!"
+                    );
                 }
                 Err(e) => {
-                    println!("{}",e);
+                    println!("{}", e);
                 }
+            };
+        }
+        Action::WriteJounal => match journal_mode(project_tracker_data) {
+            Ok(true) => {
+                println!("Keep Journaling! It's a good habit!");
+            }
+            Ok(false) => {
+                println!("");
+            }
+            Err(e) => {
+                println!("{}", e);
             }
         },
         Action::Exit => {
             println!("Goodbye! 🍅");
             exit(0);
-        },
+        }
     };
 }
 pub fn easter_egg() {
@@ -125,25 +153,30 @@ pub fn easter_egg() {
      \   \ ;            |  |,'    ---`-'          |   ;/           
       '---"             `--'                      '---'            
                                                                    "#;
-    println!("{}",ascii_art.bright_cyan())
+    println!("{}", ascii_art.bright_cyan())
 }
-pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String>{
+pub fn focus_mode(project_tracker_data: &ProjectTrackerDb) -> Result<bool, String> {
     let project_list = match pomodoro::get_all_project(project_tracker_data) {
-        Ok(result) =>result,
-        Err(e)=>{
-            panic!("{}",e)
+        Ok(result) => result,
+        Err(e) => {
+            panic!("{}", e)
         }
     };
     if project_list.is_empty() {
         return Err(format!("No Project to focus. You may create a new one."));
     }
-    println!("Please {} project for your time! (type 'cancel' to abort)","SELECT".blue());
+    println!(
+        "Please {} project for your time! (type 'cancel' to abort)",
+        "SELECT".blue()
+    );
     for (id, project) in project_list.iter().enumerate() {
         println!("{}: {}", id, project.name_getter().trim());
     }
     let project_index = loop {
         let mut project_selection = String::new();
-        io::stdin().read_line(&mut project_selection).expect("Failed to read line");
+        io::stdin()
+            .read_line(&mut project_selection)
+            .expect("Failed to read line");
 
         // Check for cancellation
         if project_selection.trim().eq_ignore_ascii_case("cancel") {
@@ -166,7 +199,9 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
 
     let project_name = project_list[project_index].name_getter().trim().to_string();
 
-    let focus_time = match prompt_for_minutes("How many MINUTES would you like to focus for? (type 'cancel' to abort)") {
+    let focus_time = match prompt_for_minutes(
+        "How many MINUTES would you like to focus for? (type 'cancel' to abort)",
+    ) {
         Some(value) => value,
         None => {
             println!("Focus session cancelled! 🚫");
@@ -174,7 +209,9 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
         }
     };
 
-    let rest_time = match prompt_for_minutes("How many MINUTES should each rest be? (type 'cancel' to abort)") {
+    let rest_time = match prompt_for_minutes(
+        "How many MINUTES should each rest be? (type 'cancel' to abort)",
+    ) {
         Some(value) => value,
         None => {
             println!("Focus session cancelled! 🚫");
@@ -183,13 +220,20 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
     };
 
     println!("");
-    println!("{}ing on project '{}' for {} minutes...","FOCUS".green(), project_name, focus_time);
+    println!(
+        "{}ing on project '{}' for {} minutes...",
+        "FOCUS".green(),
+        project_name,
+        focus_time
+    );
     println!("Rest intervals set to {} minutes.", rest_time);
     println!("Press ENTER to start (or type 'cancel' to abort). ");
-    println!("Controls during timers: 'p' to pause/resume, 'q' to stop the session.");
+    println!("Controls during timers: 'p' to pause/resume, 's' to skip, 'q' to stop the session.");
 
     let mut start_input = String::new();
-    io::stdin().read_line(&mut start_input).expect("Failed to read line");
+    io::stdin()
+        .read_line(&mut start_input)
+        .expect("Failed to read line");
 
     if start_input.trim().eq_ignore_ascii_case("cancel") {
         println!("Focus session cancelled! 🚫");
@@ -204,7 +248,11 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
 
     loop {
         println!("");
-        println!("{} Cycle {} — Focus", "Starting".bright_green(), cycle_count);
+        println!(
+            "{} Cycle {} — Focus",
+            "Starting".bright_green(),
+            cycle_count
+        );
         let focus_outcome = run_timer("Focus", focus_seconds)?;
         let focus_minutes_logged = focus_outcome.elapsed_seconds as f32 / 60.0;
         if focus_minutes_logged > 0.0 {
@@ -218,8 +266,12 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
             break;
         }
 
-        println!("{} Focus complete! Time to rest.", "✔".green());
-        success_jingle();
+        if focus_outcome.skipped {
+            println!("Focus skipped. Moving directly to rest.");
+        } else {
+            println!("{} Focus complete! Time to rest.", "✔".green());
+            focus_completion_sound();
+        }
 
         println!("{} Cycle {} — Rest", "Starting".cyan(), cycle_count);
         let rest_outcome = run_timer("Rest", rest_seconds)?;
@@ -229,8 +281,12 @@ pub fn focus_mode(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String
             break;
         }
 
-        println!("{} Rest complete!", "✔".green());
-        success_jingle();
+        if rest_outcome.skipped {
+            println!("Rest skipped. Back to focus.");
+        } else {
+            println!("{} Rest complete!", "✔".green());
+            rest_completion_sound();
+        }
         cycle_count += 1;
     }
 
@@ -245,7 +301,9 @@ fn prompt_for_minutes(prompt: &str) -> Option<f32> {
     println!("{}", prompt);
     loop {
         let mut time_input = String::new();
-        io::stdin().read_line(&mut time_input).expect("Failed to read line");
+        io::stdin()
+            .read_line(&mut time_input)
+            .expect("Failed to read line");
 
         if time_input.trim().eq_ignore_ascii_case("cancel") {
             return None;
@@ -283,11 +341,16 @@ impl Drop for RawModeGuard {
 struct TimerOutcome {
     elapsed_seconds: u64,
     quit: bool,
+    skipped: bool,
 }
 
 fn run_timer(label: &str, total_seconds: u64) -> Result<TimerOutcome, String> {
     if total_seconds == 0 {
-        return Ok(TimerOutcome { elapsed_seconds: 0, quit: false });
+        return Ok(TimerOutcome {
+            elapsed_seconds: 0,
+            quit: false,
+            skipped: false,
+        });
     }
 
     let _raw_mode = RawModeGuard::new()?;
@@ -329,24 +392,47 @@ fn run_timer(label: &str, total_seconds: u64) -> Result<TimerOutcome, String> {
             spinner_frames[spinner_index % spinner_frames.len()].clone()
         };
 
-        print!("\r\x1B[2K{} {} remaining: {:02}:{:02}", spinner, label, minutes, seconds);
-        io::stdout().flush().map_err(|e| format!("Failed to update timer: {}", e))?;
+        print!(
+            "\r\x1B[2K{} {} remaining: {:02}:{:02}",
+            spinner, label, minutes, seconds
+        );
+        io::stdout()
+            .flush()
+            .map_err(|e| format!("Failed to update timer: {}", e))?;
 
         if remaining == 0 {
             println!("");
-            return Ok(TimerOutcome { elapsed_seconds: elapsed, quit: false });
+            return Ok(TimerOutcome {
+                elapsed_seconds: elapsed,
+                quit: false,
+                skipped: false,
+            });
         }
 
-        if event::poll(Duration::from_millis(100)).map_err(|e| format!("Failed to read input: {}", e))? {
+        if event::poll(Duration::from_millis(100))
+            .map_err(|e| format!("Failed to read input: {}", e))?
+        {
             match event::read().map_err(|e| format!("Failed to read input: {}", e))? {
                 Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
                     match key_event.code {
                         KeyCode::Char('p') | KeyCode::Char('P') => {
                             paused = !paused;
                         }
+                        KeyCode::Char('s') | KeyCode::Char('S') => {
+                            println!("");
+                            return Ok(TimerOutcome {
+                                elapsed_seconds: elapsed,
+                                quit: false,
+                                skipped: true,
+                            });
+                        }
                         KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
                             println!("");
-                            return Ok(TimerOutcome { elapsed_seconds: elapsed, quit: true });
+                            return Ok(TimerOutcome {
+                                elapsed_seconds: elapsed,
+                                quit: true,
+                                skipped: false,
+                            });
                         }
                         _ => {}
                     }
@@ -360,11 +446,16 @@ fn run_timer(label: &str, total_seconds: u64) -> Result<TimerOutcome, String> {
     }
 }
 
-pub fn create_project(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String>{
-    println!("What's the project's {}, or type 'cancel' to abort: ","NAME".cyan());
+pub fn create_project(project_tracker_data: &ProjectTrackerDb) -> Result<bool, String> {
+    println!(
+        "What's the project's {}, or type 'cancel' to abort: ",
+        "NAME".cyan()
+    );
     let mut project_name = String::new();
-    io::stdin().read_line(&mut project_name).expect("Failed to read line");
-    let project_name= project_name.trim();
+    io::stdin()
+        .read_line(&mut project_name)
+        .expect("Failed to read line");
+    let project_name = project_name.trim();
     if project_name.is_empty() {
         return Err(format!("Project name cannot be empty.").into());
     }
@@ -374,99 +465,118 @@ pub fn create_project(project_tracker_data:&ProjectTrackerDb) -> Result<bool, St
     }
     pomodoro::create_project(project_tracker_data, project_name)
 }
-pub fn delete_project(project_tracker_data:&ProjectTrackerDb) -> Result<bool, String> {
-    println!("Which project do you want to {}? Please type in its full name (or 'cancel' to abort).","DELETE".blue());
+pub fn delete_project(project_tracker_data: &ProjectTrackerDb) -> Result<bool, String> {
+    println!(
+        "Which project do you want to {}? Please type in its full name (or 'cancel' to abort).",
+        "DELETE".blue()
+    );
     let project_list = match pomodoro::get_all_project(project_tracker_data) {
-        Ok(result) =>result,
-        Err(e)=>{
-            panic!("{}",e)
+        Ok(result) => result,
+        Err(e) => {
+            panic!("{}", e)
         }
     };
     if project_list.is_empty() {
         return Err(format!("No Project to delete."));
     };
-    for project in project_list.iter(){
-        println!("{}: {} minutes", project.name_getter().trim(), project.time_getter());
-    };
+    for project in project_list.iter() {
+        println!(
+            "{}: {} minutes",
+            project.name_getter().trim(),
+            project.time_getter()
+        );
+    }
     let mut project_name = String::new();
-    io::stdin().read_line(&mut project_name).expect("Failed to read line");
-    
+    io::stdin()
+        .read_line(&mut project_name)
+        .expect("Failed to read line");
+
     // Check for cancellation
     if project_name.trim().eq_ignore_ascii_case("cancel") {
         println!("Deletion cancelled! 🚫");
         return Ok(false);
     }
-    
+
     pomodoro::delete_project(project_tracker_data, project_name.trim())
 }
 pub fn show_status(project_tracker_data: &ProjectTrackerDb) -> Result<bool, String> {
     println!("");
     println!("Your Focus Dashboard");
     println!("═══════════════════════════════════════");
-    
+
     let project_list = match pomodoro::get_all_project(project_tracker_data) {
         Ok(result) => result,
         Err(e) => {
             return Err(e);
         }
     };
-    
+
     if project_list.is_empty() {
         return Err(format!("Wow! You haven't focused for even one minute! 😹"));
     }
-    
+
     let total_time: f32 = project_list.iter().map(|p| p.time_getter()).sum();
-    let max_name_len = project_list.iter()
+    let max_name_len = project_list
+        .iter()
         .map(|p| p.name_getter().trim().len())
         .max()
         .unwrap_or(0);
-    
+
     for project in project_list.iter() {
         let name = project.name_getter().trim();
         let time = project.time_getter();
         let percentage = (time as f64 / total_time as f64) * 100.0;
         let bar_length = ((percentage / 100.0) * 30.0) as usize;
-        
+
         let hours = time / 60.0;
         let time_str = format!("{}h", hours);
         let bar = "█".repeat(bar_length) + &"░".repeat(30 - bar_length);
-        
+
         println!(
-            "{:<width$} │ {} │ {:>7} ({:5.1}%)", 
-            name, bar, time_str, percentage, width = max_name_len
+            "{:<width$} │ {} │ {:>7} ({:5.1}%)",
+            name,
+            bar,
+            time_str,
+            percentage,
+            width = max_name_len
         );
     }
-    
+
     println!("═══════════════════════════════════════");
     let total_hours = total_time / 60.0;
-    println!("{} Focus Time: {}h","TOTAL".cyan(), total_hours);
+    println!("{} Focus Time: {}h", "TOTAL".cyan(), total_hours);
     println!("");
     Ok(true)
 }
 pub fn journal_mode(project_tracker_data: &ProjectTrackerDb) -> Result<bool, String> {
     let project_list = match pomodoro::get_all_project(project_tracker_data) {
-        Ok(result) =>result,
-        Err(e)=>{
-            panic!("{}",e)
+        Ok(result) => result,
+        Err(e) => {
+            panic!("{}", e)
         }
     };
     if project_list.is_empty() {
         return Err(format!("No journal to write. You may create a new one."));
     }
-    println!("Please {} project for journaling! (type 'cancel' to abort)","SELECT".blue());
+    println!(
+        "Please {} project for journaling! (type 'cancel' to abort)",
+        "SELECT".blue()
+    );
     for (id, project) in project_list.iter().enumerate() {
         println!("{}: {}", id, project.name_getter().trim());
     }
-    let project_index = loop{
+    let project_index = loop {
         let mut project_selection = String::new();
-        io::stdin().read_line(&mut project_selection).expect("Failed to read line");
-        
+        io::stdin()
+            .read_line(&mut project_selection)
+            .expect("Failed to read line");
+
         // Check for cancellation
         if project_selection.trim().eq_ignore_ascii_case("cancel") {
             println!("Journaling cancelled! 🚫");
             return Ok(false);
         }
-        
+
         match project_selection.trim().parse::<u8>() {
             Ok(index) if usize::from(index) < project_list.len() => {
                 break index;
@@ -479,30 +589,36 @@ pub fn journal_mode(project_tracker_data: &ProjectTrackerDb) -> Result<bool, Str
             }
         }
     };
-    pomodoro::write_journal(project_tracker_data, project_list[usize::from(project_index)].name_getter().trim())
+    pomodoro::write_journal(
+        project_tracker_data,
+        project_list[usize::from(project_index)]
+            .name_getter()
+            .trim(),
+    )
 }
-fn success_jingle() {
-    let notes = [
-        (523, 200), // C5 - quick
-        (659, 200), // E5 - ascending  
-        (784, 200), // G5 - higher
-        (1047, 600), // C6 - triumphant end
-    ];
-    
+fn focus_completion_sound() {
+    let notes = [(523, 160), (659, 180), (784, 260)];
+    play_tones(&notes);
+}
+
+fn rest_completion_sound() {
+    let notes = [(392, 220), (370, 180), (330, 280)];
+    play_tones(&notes);
+}
+
+fn play_tones(notes: &[(u32, u64)]) {
     if std::env::consts::OS == "windows" {
-        // Windows: use PowerShell for proper tunes
         for (freq, duration) in notes.iter() {
             let _ = Command::new("powershell.exe")
                 .args(&["-c", &format!("[Console]::Beep({}, {})", freq, duration)])
                 .output();
-            thread::sleep(Duration::from_millis(50));
+            thread::sleep(Duration::from_millis(60));
         }
     } else {
-        // Linux: use ASCII bell character
-        for _ in 0..4 {
+        for (_, duration) in notes.iter() {
             print!("\x07");
-            std::io::stdout().flush().unwrap();
-            thread::sleep(Duration::from_millis(50));
+            let _ = io::stdout().flush();
+            thread::sleep(Duration::from_millis(*duration));
         }
     }
 }
