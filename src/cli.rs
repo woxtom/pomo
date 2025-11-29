@@ -219,6 +219,16 @@ pub fn focus_mode(project_tracker_data: &ProjectTrackerDb) -> Result<bool, Strin
         }
     };
 
+    let long_rest_time = match prompt_for_minutes(
+        "How many MINUTES should the long rest be (after 3 cycles)? (type 'cancel' to abort)",
+    ) {
+        Some(value) => value,
+        None => {
+            println!("Focus session cancelled! 🚫");
+            return Ok(false);
+        }
+    };
+
     println!("");
     println!(
         "{}ing on project '{}' for {} minutes...",
@@ -227,6 +237,7 @@ pub fn focus_mode(project_tracker_data: &ProjectTrackerDb) -> Result<bool, Strin
         focus_time
     );
     println!("Rest intervals set to {} minutes.", rest_time);
+    println!("Long rest (every 3 cycles) set to {} minutes.", long_rest_time);
     println!("Press ENTER to start (or type 'cancel' to abort). ");
     println!("Controls during timers: 'p' to pause/resume, 's' to skip, 'q' to stop the session.");
 
@@ -242,7 +253,9 @@ pub fn focus_mode(project_tracker_data: &ProjectTrackerDb) -> Result<bool, Strin
 
     let focus_seconds = (focus_time * 60.0) as u64;
     let rest_seconds = (rest_time * 60.0) as u64;
+    let long_rest_seconds = (long_rest_time * 60.0) as u64;
     let mut cycle_count = 1usize;
+    let mut rest_count = 0usize;
     let mut total_tracked_minutes = 0.0f32;
     let mut any_tracked = false;
 
@@ -286,7 +299,31 @@ pub fn focus_mode(project_tracker_data: &ProjectTrackerDb) -> Result<bool, Strin
         } else {
             println!("{} Rest complete!", "✔".green());
             rest_completion_sound();
+            rest_count += 1;
         }
+
+        // Check if it's time for a long rest (after 3 regular rests)
+        if rest_count == 3 {
+            println!("");
+            println!("{} Time for a long rest!", "🌟".bright_yellow());
+            println!("{} Long Rest", "Starting".bright_cyan());
+            let long_rest_outcome = run_timer("Long Rest", long_rest_seconds)?;
+
+            if long_rest_outcome.quit {
+                println!("{} session ended during long rest.", "Focus".yellow());
+                break;
+            }
+
+            if long_rest_outcome.skipped {
+                println!("Long rest skipped. Back to focus.");
+            } else {
+                println!("{} Long rest complete! Ready for more focus!", "✔".green());
+                rest_completion_sound();
+            }
+
+            rest_count = 0; // Reset the rest counter
+        }
+
         cycle_count += 1;
     }
 
